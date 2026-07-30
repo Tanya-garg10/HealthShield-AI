@@ -1,6 +1,6 @@
 import express from "express";
 import path from "path";
-import { GoogleGenAI, Type } from "@google/genai";
+import Groq from "groq-sdk";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 
@@ -12,19 +12,14 @@ const PORT = 3000;
 // Body parser for JSON payloads (up to 25MB for image/audio base64 data)
 app.use(express.json({ limit: "25mb" }));
 
-// Initialize Gemini Client
-function getGeminiClient() {
-  const apiKey = process.env.GEMINI_API_KEY;
+// Initialize Groq Client
+function getGroqClient() {
+  const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
-    throw new Error("GEMINI_API_KEY environment variable is not configured.");
+    throw new Error("GROQ_API_KEY environment variable is not configured.");
   }
-  return new GoogleGenAI({
+  return new Groq({
     apiKey,
-    httpOptions: {
-      headers: {
-        "User-Agent": "aistudio-build",
-      },
-    },
   });
 }
 
@@ -50,68 +45,68 @@ Determine verdict, confidence score (0-100%), misinformation risk score (Low/Med
 Reply adhering strictly to the requested language preference or match the user's input language.`;
 
 const healthShieldResponseSchema = {
-  type: Type.OBJECT,
+  type: "object",
   properties: {
     verdict: {
-      type: Type.STRING,
+      type: "string",
       description: "Must be exactly one of: 'True', 'Mostly True', 'Misleading', 'False', or 'Not Enough Evidence'",
     },
     confidence: {
-      type: Type.NUMBER,
+      type: "number",
       description: "Confidence percentage integer from 0 to 100",
     },
     riskScore: {
-      type: Type.STRING,
+      type: "string",
       description: "Must be exactly one of: 'Low', 'Medium', or 'High'",
     },
     riskReason: {
-      type: Type.STRING,
+      type: "string",
       description: "Clear 1-2 sentence explanation for the assigned misinformation risk score",
     },
     shareRecommendation: {
-      type: Type.STRING,
+      type: "string",
       description: "Must be exactly one of: 'Safe to Share' or 'Do Not Forward'",
     },
     mainClaim: {
-      type: Type.STRING,
+      type: "string",
       description: "Concise summary of the primary health claim being analyzed",
     },
     explanation: {
-      type: Type.STRING,
+      type: "string",
       description: "Simple language explanation of why the claim is true, misleading, or false, understandable by non-medical readers",
     },
     whyReasoning: {
-      type: Type.STRING,
+      type: "string",
       description: "Deeper medical/scientific rationale and facts behind the verdict",
     },
     possibleRisks: {
-      type: Type.STRING,
+      type: "string",
       description: "Potential health or medical harms if someone acts on this false or misleading advice",
     },
     correctMedicalAdvice: {
-      type: Type.STRING,
+      type: "string",
       description: "Scientifically accurate health guidance on what people should actually do instead",
     },
     trustedSources: {
-      type: Type.ARRAY,
-      items: { type: Type.STRING },
+      type: "array",
+      items: { type: "string" },
       description: "List of relevant trusted medical bodies like WHO, ICMR, AIIMS, MoHFW, CDC",
     },
     sources: {
-      type: Type.ARRAY,
-      items: { type: Type.STRING },
+      type: "array",
+      items: { type: "string" },
       description: "Specific source references, web links, or guidelines (e.g., 'WHO COVID-19 Mythbusters', 'ICMR Dengue Guidelines', 'AIIMS Clinical Advisory')",
     },
     emergencyAdvice: {
-      type: Type.STRING,
+      type: "string",
       description: "Standard advice if symptoms are severe or urgent medical attention is required",
     },
     detectedLanguage: {
-      type: Type.STRING,
+      type: "string",
       description: "Language detected (e.g. English, Hinglish, Hindi, Tamil, Bengali, Marathi)",
     },
     whatsappShareCardText: {
-      type: Type.STRING,
+      type: "string",
       description: "Formatted ready-to-copy WhatsApp message with emojis and clear verdict for sharing in family groups to stop rumors",
     },
   },
@@ -143,9 +138,7 @@ app.post("/api/verify", async (req, res) => {
       return;
     }
 
-    const ai = getGeminiClient();
-
-    let userPromptParts: any[] = [];
+    const groq = getGroqClient();
 
     let promptText = "Analyze and fact-check the following health claim forwarded on social media/messaging apps:\n\n";
 
@@ -157,46 +150,36 @@ app.post("/api/verify", async (req, res) => {
       promptText += `PREFERRED RESPONSE LANGUAGE: ${targetLanguage}. Please provide the explanation, main claim, and advice in ${targetLanguage} while keeping medical terms accurate.\n\n`;
     }
 
-    userPromptParts.push({ text: promptText });
-
     if (imageBase64) {
-      userPromptParts.push({
-        inlineData: {
-          data: imageBase64,
-          mimeType: imageMimeType || "image/jpeg",
-        },
-      });
-      userPromptParts.push({
-        text: "Perform OCR if there is text in the image, examine any visual health claims, packaging, or screenshots, and fact-check them thoroughly.",
-      });
+      promptText += "IMAGE DATA: Analyze the provided image for any health claims, medical text, or misinformation.\n\n";
     }
 
     if (audioBase64) {
-      userPromptParts.push({
-        inlineData: {
-          data: audioBase64,
-          mimeType: audioMimeType || "audio/webm",
-        },
-      });
-      userPromptParts.push({
-        text: "Transcribe the spoken voice message in the audio file and fact-check any health claims made in it.",
-      });
+      promptText += "AUDIO DATA: Transcribe and analyze any health claims in the audio.\n\n";
     }
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.6-flash",
-      contents: { parts: userPromptParts },
-      config: {
-        systemInstruction: HEALTH_SHIELD_MASTER_PROMPT,
-        responseMimeType: "application/json",
-        responseSchema: healthShieldResponseSchema,
-        temperature: 0.2, // Low temperature for high fact checking accuracy
+    const response = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        {
+          role: "system",
+          content: HEALTH_SHIELD_MASTER_PROMPT,
+        },
+        {
+          role: "user",
+          content: promptText,
+        },
+      ],
+      response_format: {
+        type: "json_object",
+        schema: healthShieldResponseSchema,
       },
+      temperature: 0.2,
     });
 
-    const responseText = response.text;
+    const responseText = response.choices[0]?.message?.content;
     if (!responseText) {
-      throw new Error("No response received from Gemini verification model.");
+      throw new Error("No response received from Groq verification model.");
     }
 
     const parsedResult = JSON.parse(responseText);
