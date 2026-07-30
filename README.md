@@ -1,12 +1,12 @@
 <div align="center">
   <h1>🛡️ HealthShield AI</h1>
   <p>AI-Powered Health Insurance Claim Verification System</p>
+  
+  ![License](https://img.shields.io/badge/license-MIT-blue.svg)
+  ![React](https://img.shields.io/badge/React-19.0.1-61DAFB)
+  ![TypeScript](https://img.shields.io/badge/TypeScript-5.8.2-3178C6)
+  ![Node](https://img.shields.io/badge/Node.js-18+-green)
 </div>
-
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![React](https://img.shields.io/badge/React-19.0.1-61DAFB)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.8.2-3178C6)
-![Node](https://img.shields.io/badge/Node.js-18+-green)
 
 ## 📋 Overview
 
