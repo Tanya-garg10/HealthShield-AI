@@ -14,7 +14,7 @@ HealthShield AI is an intelligent health insurance claim verification system tha
 
 ## ✨ Features
 
-- **AI-Powered Claim Analysis**: Utilizes Google Gemini 2.0 Flash AI for intelligent claim verification
+- **AI-Powered Claim Analysis**: Utilizes OpenRouter (Claude 3.5 Sonnet) for intelligent claim verification
 - **Interactive Dashboard**: Real-time visualization of claim trends and statistics
 - **Trending Radar**: Advanced radar charts to visualize claim patterns and anomalies
 - **Verification Reports**: Detailed PDF reports for claim analysis and audit trails
@@ -26,7 +26,7 @@ HealthShield AI is an intelligent health insurance claim verification system tha
 
 - **Frontend**: React 19, TypeScript, Tailwind CSS 4
 - **Backend**: Express.js, Node.js
-- **AI Integration**: Google Gemini 2.0 Flash AI
+- **AI Integration**: OpenRouter (Claude 3.5 Sonnet)
 - **Charts**: Recharts for data visualization
 - **PDF Generation**: jsPDF, html2canvas
 - **Build Tools**: Vite, esbuild
@@ -38,7 +38,7 @@ HealthShield AI is an intelligent health insurance claim verification system tha
 
 - Node.js 18 or higher
 - npm or bun package manager
-- Google Gemini API Key (Get free from https://makersuite.google.com/app/apikey)
+- OpenRouter API Key (Get free from https://openrouter.ai/keys)
 
 ### Setup
 
@@ -58,7 +58,7 @@ HealthShield AI is an intelligent health insurance claim verification system tha
 3. **Set up environment variables**
    Create a `.env` file in the root directory:
    ```env
-   GEMINI_API_KEY=your_gemini_api_key_here
+   OPENROUTER_API_KEY=your_openrouter_api_key_here
    PORT=3000
    ```
 
@@ -106,7 +106,7 @@ healthshield/
 
 ### Environment Variables
 
-- `GEMINI_API_KEY`: Your Google Gemini API key for AI processing (Get free from https://makersuite.google.com/app/apikey)
+- `OPENROUTER_API_KEY`: Your OpenRouter API key for AI processing (Get free from https://openrouter.ai/keys)
 - `PORT`: Server port (default: 3000)
 
 ## 🌐 Deployment
@@ -125,7 +125,7 @@ healthshield/
 
 3. **Set Environment Variables**
    - Go to your Vercel project settings
-   - Add `GEMINI_API_KEY` in environment variables
+   - Add `OPENROUTER_API_KEY` in environment variables
 
 ### Option 2: Railway (Full-Stack)
 
@@ -147,7 +147,7 @@ healthshield/
 
 4. **Add Environment Variables**
    ```bash
-   railway variables set GEMINI_API_KEY=your_api_key
+   railway variables set OPENROUTER_API_KEY=your_api_key
    railway variables set PORT=3000
    ```
 
@@ -162,7 +162,7 @@ healthshield/
        buildCommand: npm run build
        startCommand: npm start
        envVars:
-         - key: GEMINI_API_KEY
+         - key: OPENROUTER_API_KEY
            sync: false
          - key: PORT
            value: 3000
@@ -188,7 +188,7 @@ healthshield/
 2. **Build and run Docker container**
    ```bash
    docker build -t healthshield-ai .
-   docker run -p 3000:3000 -e GEMINI_API_KEY=your_key healthshield-ai
+   docker run -p 3000:3000 -e OPENROUTER_API_KEY=your_key healthshield-ai
    ```
 
 3. **Deploy to Docker Hub or any cloud provider**
@@ -224,7 +224,7 @@ healthshield/
 ### Environment Variables Setup
 
 For all deployment methods, make sure to set:
-- `GEMINI_API_KEY`: Your Google Gemini API key (Get free from https://makersuite.google.com/app/apikey)
+- `OPENROUTER_API_KEY`: Your OpenRouter API key (Get free from https://openrouter.ai/keys)
 - `PORT`: The port your application will run on (default: 3000)
 
 ### Pre-Deployment Checklist
@@ -274,7 +274,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 Acknowledgments
 
-- Google for the powerful Gemini 2.0 Flash AI API
+- OpenRouter for providing access to Claude 3.5 Sonnet and other AI models
 - React community for the amazing frontend framework
 - Recharts for the beautiful charting library
 

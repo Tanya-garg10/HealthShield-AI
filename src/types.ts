@@ -10,6 +10,7 @@ export interface VerificationResult {
   possibleRisks: string;
   correctMedicalAdvice: string;
   trustedSources: string[];
+  sources?: string[];
   emergencyAdvice: string;
   detectedLanguage: string;
   whatsappShareCardText: string;

@@ -1,6 +1,6 @@
 import express from "express";
 import path from "path";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import OpenAI from "openai";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 
@@ -12,17 +12,20 @@ const PORT = 3000;
 // Body parser for JSON payloads (up to 25MB for image/audio base64 data)
 app.use(express.json({ limit: "25mb" }));
 
-// Initialize Gemini Client
-function getGeminiClient() {
-  const apiKey = process.env.GEMINI_API_KEY;
+// Initialize OpenRouter Client
+function getOpenRouterClient() {
+  const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
-    throw new Error("GEMINI_API_KEY environment variable is not configured.");
+    throw new Error("OPENROUTER_API_KEY environment variable is not configured.");
   }
-  return new GoogleGenerativeAI(apiKey);
+  return new OpenAI({
+    apiKey,
+    baseURL: "https://openrouter.ai/api/v1",
+  });
 }
 
 const HEALTH_SHIELD_MASTER_PROMPT = `# ROLE
-You are HealthShield AI, an expert healthcare misinformation verifier for India powered by Google Gemini AI.
+You are HealthShield AI, an expert healthcare misinformation verifier for India powered by OpenRouter AI.
 Your mission is to verify health-related claims shared through WhatsApp, SMS, social media, images, or voice transcripts.
 You explain medical information in simple language that anyone can understand.
 
@@ -92,6 +95,11 @@ const healthShieldResponseSchema = {
       items: { type: "string" },
       description: "List of relevant trusted medical bodies like WHO, ICMR, AIIMS, MoHFW, CDC",
     },
+    sources: {
+      type: "array",
+      items: { type: "string" },
+      description: "Specific source references, web links, or guidelines (e.g., 'WHO COVID-19 Mythbusters', 'ICMR Dengue Guidelines', 'AIIMS Clinical Advisory')",
+    },
     emergencyAdvice: {
       type: "string",
       description: "Standard advice if symptoms are severe or urgent medical attention is required",
@@ -117,6 +125,7 @@ const healthShieldResponseSchema = {
     "possibleRisks",
     "correctMedicalAdvice",
     "trustedSources",
+    "sources",
     "emergencyAdvice",
     "detectedLanguage",
     "whatsappShareCardText",
@@ -133,14 +142,7 @@ app.post("/api/verify", async (req, res) => {
       return;
     }
 
-    const genAI = getGeminiClient();
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-2.0-flash-exp",
-      generationConfig: {
-        temperature: 0.2,
-        responseMimeType: "application/json",
-      }
-    });
+    const openrouter = getOpenRouterClient();
 
     let promptText = "Analyze and fact-check the following health claim forwarded on social media/messaging apps. Please provide your response in JSON format.\n\n";
 
@@ -162,13 +164,27 @@ app.post("/api/verify", async (req, res) => {
 
     promptText += "Ensure your response is a valid JSON object with all required fields.";
 
-    const fullPrompt = `${HEALTH_SHIELD_MASTER_PROMPT}\n\n${promptText}`;
+    const response = await openrouter.chat.completions.create({
+      model: "anthropic/claude-3.5-sonnet",
+      messages: [
+        {
+          role: "system",
+          content: HEALTH_SHIELD_MASTER_PROMPT,
+        },
+        {
+          role: "user",
+          content: promptText,
+        },
+      ],
+      response_format: {
+        type: "json_object",
+      },
+      temperature: 0.2,
+    });
 
-    const response = await model.generateContent(fullPrompt);
-    const responseText = response.response.text();
-    
+    const responseText = response.choices[0]?.message?.content;
     if (!responseText) {
-      throw new Error("No response received from Gemini verification model.");
+      throw new Error("No response received from OpenRouter verification model.");
     }
 
     const parsedResult = JSON.parse(responseText);
@@ -177,14 +193,14 @@ app.post("/api/verify", async (req, res) => {
     console.error("Error in /api/verify:", error);
     res.status(500).json({
       success: false,
-      error: error.message || "Failed to process health claim fact check with Gemini AI.",
+      error: error.message || "Failed to process health claim fact check with OpenRouter AI.",
     });
   }
 });
 
 // Health check endpoint
 app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", app: "HealthShield AI", ai: "Gemini 2.0 Flash" });
+  res.json({ status: "ok", app: "HealthShield AI", ai: "OpenRouter (Claude 3.5 Sonnet)" });
 });
 
 async function startServer() {
@@ -203,7 +219,7 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`HealthShield AI server running on http://localhost:${PORT} with Gemini 2.0 Flash`);
+    console.log(`HealthShield AI server running on http://localhost:${PORT} with OpenRouter (Claude 3.5 Sonnet)`);
   });
 }
 
