@@ -14,7 +14,7 @@ HealthShield AI is an intelligent health insurance claim verification system tha
 
 ## ✨ Features
 
-- **AI-Powered Claim Analysis**: Utilizes Google Gemini AI for intelligent claim verification
+- **AI-Powered Claim Analysis**: Utilizes Groq API (Llama 3.3 70B) for intelligent claim verification
 - **Interactive Dashboard**: Real-time visualization of claim trends and statistics
 - **Trending Radar**: Advanced radar charts to visualize claim patterns and anomalies
 - **Verification Reports**: Detailed PDF reports for claim analysis and audit trails
@@ -26,7 +26,7 @@ HealthShield AI is an intelligent health insurance claim verification system tha
 
 - **Frontend**: React 19, TypeScript, Tailwind CSS 4
 - **Backend**: Express.js, Node.js
-- **AI Integration**: Google Gemini AI SDK
+- **AI Integration**: Groq API (Llama 3.3 70B)
 - **Charts**: Recharts for data visualization
 - **PDF Generation**: jsPDF, html2canvas
 - **Build Tools**: Vite, esbuild
@@ -38,7 +38,7 @@ HealthShield AI is an intelligent health insurance claim verification system tha
 
 - Node.js 18 or higher
 - npm or bun package manager
-- Google Gemini API Key
+- Groq API Key (Get free from https://console.groq.com/keys)
 
 ### Setup
 
@@ -58,7 +58,7 @@ HealthShield AI is an intelligent health insurance claim verification system tha
 3. **Set up environment variables**
    Create a `.env` file in the root directory:
    ```env
-   GEMINI_API_KEY=your_gemini_api_key_here
+   GROQ_API_KEY=your_groq_api_key_here
    PORT=3000
    ```
 
@@ -106,8 +106,136 @@ healthshield/
 
 ### Environment Variables
 
-- `GEMINI_API_KEY`: Your Google Gemini API key for AI processing
+- `GROQ_API_KEY`: Your Groq API key for AI processing (Get free from https://console.groq.com/keys)
 - `PORT`: Server port (default: 3000)
+
+## 🌐 Deployment
+
+### Option 1: Vercel (Recommended for Frontend)
+
+1. **Install Vercel CLI**
+   ```bash
+   npm install -g vercel
+   ```
+
+2. **Deploy to Vercel**
+   ```bash
+   vercel
+   ```
+
+3. **Set Environment Variables**
+   - Go to your Vercel project settings
+   - Add `GROQ_API_KEY` in environment variables
+
+### Option 2: Railway (Full-Stack)
+
+1. **Install Railway CLI**
+   ```bash
+   npm install -g @railway/cli
+   ```
+
+2. **Login to Railway**
+   ```bash
+   railway login
+   ```
+
+3. **Initialize and Deploy**
+   ```bash
+   railway init
+   railway up
+   ```
+
+4. **Add Environment Variables**
+   ```bash
+   railway variables set GROQ_API_KEY=your_api_key
+   railway variables set PORT=3000
+   ```
+
+### Option 3: Render (Full-Stack)
+
+1. **Create a `render.yaml` file**
+   ```yaml
+   services:
+     - type: web
+       name: healthshield-ai
+       env: node
+       buildCommand: npm run build
+       startCommand: npm start
+       envVars:
+         - key: GROQ_API_KEY
+           sync: false
+         - key: PORT
+           value: 3000
+   ```
+
+2. **Connect your GitHub repository to Render**
+3. **Deploy automatically from your main branch**
+
+### Option 4: Docker Deployment
+
+1. **Create a `Dockerfile`**
+   ```dockerfile
+   FROM node:18-alpine
+   WORKDIR /app
+   COPY package*.json ./
+   RUN npm install
+   COPY . .
+   RUN npm run build
+   EXPOSE 3000
+   CMD ["npm", "start"]
+   ```
+
+2. **Build and run Docker container**
+   ```bash
+   docker build -t healthshield-ai .
+   docker run -p 3000:3000 -e GROQ_API_KEY=your_key healthshield-ai
+   ```
+
+3. **Deploy to Docker Hub or any cloud provider**
+
+### Option 5: VPS/Cloud Server
+
+1. **Build the project**
+   ```bash
+   npm run build
+   ```
+
+2. **Upload files to your server**
+   ```bash
+   scp -r dist user@your-server:/var/www/healthshield
+   ```
+
+3. **Install dependencies on server**
+   ```bash
+   cd /var/www/healthshield
+   npm install --production
+   ```
+
+4. **Use PM2 to run the application**
+   ```bash
+   npm install -g pm2
+   pm2 start dist/server.cjs --name healthshield
+   pm2 startup
+   pm2 save
+   ```
+
+5. **Set up Nginx reverse proxy (optional)**
+
+### Environment Variables Setup
+
+For all deployment methods, make sure to set:
+- `GROQ_API_KEY`: Your Groq API key (Get free from https://console.groq.com/keys)
+- `PORT`: The port your application will run on (default: 3000)
+
+### Pre-Deployment Checklist
+
+- [ ] Set all required environment variables
+- [ ] Test the build locally (`npm run build`)
+- [ ] Verify API keys are valid
+- [ ] Check database connections (if applicable)
+- [ ] Test the production build locally
+- [ ] Configure domain/DNS settings
+- [ ] Set up SSL/HTTPS (recommended)
 
 ## 📊 Features in Detail
 
@@ -146,7 +274,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 Acknowledgments
 
-- Google Gemini AI for the powerful AI capabilities
+- Groq for the powerful and fast AI API
 - React community for the amazing frontend framework
 - Recharts for the beautiful charting library
 
