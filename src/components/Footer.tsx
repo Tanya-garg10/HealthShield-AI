@@ -44,7 +44,7 @@ export const Footer: React.FC = () => {
 
         {/* Bottom copyright */}
         <div className="text-center text-xs text-slate-500 flex items-center justify-center gap-1">
-          <span>Powered by OpenRouter (Claude 3.5 Sonnet)</span>
+          <span>Powered by OpenRouter (Claude 3.5 Sonnet Beta)</span>
           <span>•</span>
           <span>Built for India Health Misinformation Track 1</span>
         </div>

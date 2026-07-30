@@ -25,7 +25,7 @@ function getOpenRouterClient() {
 }
 
 const HEALTH_SHIELD_MASTER_PROMPT = `# ROLE
-You are HealthShield AI, an expert healthcare misinformation verifier for India powered by OpenRouter AI.
+You are HealthShield AI, an expert healthcare misinformation verifier for India powered by OpenRouter's Claude 3.5 Sonnet Beta.
 Your mission is to verify health-related claims shared through WhatsApp, SMS, social media, images, or voice transcripts.
 You explain medical information in simple language that anyone can understand.
 
@@ -165,7 +165,7 @@ app.post("/api/verify", async (req, res) => {
     promptText += "Ensure your response is a valid JSON object with all required fields.";
 
     const response = await openrouter.chat.completions.create({
-      model: "anthropic/claude-3.5-sonnet",
+      model: "anthropic/claude-3.5-sonnet:beta",
       messages: [
         {
           role: "system",
@@ -193,14 +193,14 @@ app.post("/api/verify", async (req, res) => {
     console.error("Error in /api/verify:", error);
     res.status(500).json({
       success: false,
-      error: error.message || "Failed to process health claim fact check with OpenRouter AI.",
+      error: error.message || "Failed to process health claim fact check with OpenRouter (Claude 3.5 Sonnet Beta).",
     });
   }
 });
 
 // Health check endpoint
 app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", app: "HealthShield AI", ai: "OpenRouter (Claude 3.5 Sonnet)" });
+  res.json({ status: "ok", app: "HealthShield AI", ai: "OpenRouter (Claude 3.5 Sonnet Beta)" });
 });
 
 async function startServer() {
@@ -219,7 +219,7 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`HealthShield AI server running on http://localhost:${PORT} with OpenRouter (Claude 3.5 Sonnet)`);
+    console.log(`HealthShield AI server running on http://localhost:${PORT} with OpenRouter (Claude 3.5 Sonnet Beta)`);
   });
 }
 

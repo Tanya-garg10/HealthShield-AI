@@ -14,7 +14,7 @@ HealthShield AI is an intelligent health insurance claim verification system tha
 
 ## ✨ Features
 
-- **AI-Powered Claim Analysis**: Utilizes OpenRouter (Claude 3.5 Sonnet) for intelligent claim verification
+- **AI-Powered Claim Analysis**: Utilizes OpenRouter (Claude 3.5 Sonnet Beta) for intelligent claim verification
 - **Interactive Dashboard**: Real-time visualization of claim trends and statistics
 - **Trending Radar**: Advanced radar charts to visualize claim patterns and anomalies
 - **Verification Reports**: Detailed PDF reports for claim analysis and audit trails
@@ -26,7 +26,7 @@ HealthShield AI is an intelligent health insurance claim verification system tha
 
 - **Frontend**: React 19, TypeScript, Tailwind CSS 4
 - **Backend**: Express.js, Node.js
-- **AI Integration**: OpenRouter (Claude 3.5 Sonnet)
+- **AI Integration**: OpenRouter (Claude 3.5 Sonnet Beta)
 - **Charts**: Recharts for data visualization
 - **PDF Generation**: jsPDF, html2canvas
 - **Build Tools**: Vite, esbuild
@@ -274,7 +274,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 Acknowledgments
 
-- OpenRouter for providing access to Claude 3.5 Sonnet and other AI models
+- OpenRouter for providing access to Claude 3.5 Sonnet Beta and other AI models
 - React community for the amazing frontend framework
 - Recharts for the beautiful charting library
 
