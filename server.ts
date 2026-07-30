@@ -42,6 +42,8 @@ You explain medical information in simple language that anyone can understand.
 Analyze the provided claim (text, image description/OCR, voice transcript, mixed Hinglish/Hindi/English/Regional languages).
 Determine verdict, confidence score (0-100%), misinformation risk score (Low/Medium/High), share recommendation (Safe to Share / Do Not Forward), main claim, simple explanation, scientific reasoning, potential risks, correct evidence-based advice, trusted sources, and emergency advice.
 
+IMPORTANT: Always respond in valid JSON format. Your response must be a JSON object with all required fields.
+
 Reply adhering strictly to the requested language preference or match the user's input language.`;
 
 const healthShieldResponseSchema = {
@@ -140,7 +142,7 @@ app.post("/api/verify", async (req, res) => {
 
     const groq = getGroqClient();
 
-    let promptText = "Analyze and fact-check the following health claim forwarded on social media/messaging apps:\n\n";
+    let promptText = "Analyze and fact-check the following health claim forwarded on social media/messaging apps. Please provide your response in JSON format.\n\n";
 
     if (text) {
       promptText += `FORWARDED CLAIM TEXT:\n"${text}"\n\n`;
@@ -158,6 +160,8 @@ app.post("/api/verify", async (req, res) => {
       promptText += "AUDIO DATA: Transcribe and analyze any health claims in the audio.\n\n";
     }
 
+    promptText += "Ensure your response is a valid JSON object with all required fields.";
+
     const response = await groq.chat.completions.create({
       model: "llama-3.3-70b-versatile",
       messages: [
@@ -172,7 +176,6 @@ app.post("/api/verify", async (req, res) => {
       ],
       response_format: {
         type: "json_object",
-        schema: healthShieldResponseSchema,
       },
       temperature: 0.2,
     });
