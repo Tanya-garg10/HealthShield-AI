@@ -140,9 +140,9 @@ Contributions are welcome! Please follow these steps:
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 👥 Authors
+## 👥 Author
 
-- **Tanya Garg** - Initial work
+- **Tanya Garg** 
 
 ## 🙏 Acknowledgments
 
@@ -154,7 +154,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 For support, please open an issue in the GitHub repository or contact the maintainers.
 
----
 
 <div align="center">
   <p>Built with ❤️ for better healthcare claim processing</p>
