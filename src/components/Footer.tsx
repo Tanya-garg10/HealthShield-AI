@@ -44,7 +44,7 @@ export const Footer: React.FC = () => {
 
         {/* Bottom copyright */}
         <div className="text-center text-xs text-slate-500 flex items-center justify-center gap-1">
-          <span>Powered by Gemini 3.6 Flash</span>
+          <span>Powered by Gemini 2.0 Flash</span>
           <span>•</span>
           <span>Built for India Health Misinformation Track 1</span>
         </div>

@@ -1,6 +1,6 @@
 import express from "express";
 import path from "path";
-import Groq from "groq-sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 
@@ -12,19 +12,17 @@ const PORT = 3000;
 // Body parser for JSON payloads (up to 25MB for image/audio base64 data)
 app.use(express.json({ limit: "25mb" }));
 
-// Initialize Groq Client
-function getGroqClient() {
-  const apiKey = process.env.GROQ_API_KEY;
+// Initialize Gemini Client
+function getGeminiClient() {
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error("GROQ_API_KEY environment variable is not configured.");
+    throw new Error("GEMINI_API_KEY environment variable is not configured.");
   }
-  return new Groq({
-    apiKey,
-  });
+  return new GoogleGenerativeAI(apiKey);
 }
 
 const HEALTH_SHIELD_MASTER_PROMPT = `# ROLE
-You are HealthShield AI, an expert healthcare misinformation verifier for India.
+You are HealthShield AI, an expert healthcare misinformation verifier for India powered by Google Gemini AI.
 Your mission is to verify health-related claims shared through WhatsApp, SMS, social media, images, or voice transcripts.
 You explain medical information in simple language that anyone can understand.
 
@@ -94,11 +92,6 @@ const healthShieldResponseSchema = {
       items: { type: "string" },
       description: "List of relevant trusted medical bodies like WHO, ICMR, AIIMS, MoHFW, CDC",
     },
-    sources: {
-      type: "array",
-      items: { type: "string" },
-      description: "Specific source references, web links, or guidelines (e.g., 'WHO COVID-19 Mythbusters', 'ICMR Dengue Guidelines', 'AIIMS Clinical Advisory')",
-    },
     emergencyAdvice: {
       type: "string",
       description: "Standard advice if symptoms are severe or urgent medical attention is required",
@@ -140,7 +133,14 @@ app.post("/api/verify", async (req, res) => {
       return;
     }
 
-    const groq = getGroqClient();
+    const genAI = getGeminiClient();
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-2.0-flash-exp",
+      generationConfig: {
+        temperature: 0.2,
+        responseMimeType: "application/json",
+      }
+    });
 
     let promptText = "Analyze and fact-check the following health claim forwarded on social media/messaging apps. Please provide your response in JSON format.\n\n";
 
@@ -162,27 +162,13 @@ app.post("/api/verify", async (req, res) => {
 
     promptText += "Ensure your response is a valid JSON object with all required fields.";
 
-    const response = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
-      messages: [
-        {
-          role: "system",
-          content: HEALTH_SHIELD_MASTER_PROMPT,
-        },
-        {
-          role: "user",
-          content: promptText,
-        },
-      ],
-      response_format: {
-        type: "json_object",
-      },
-      temperature: 0.2,
-    });
+    const fullPrompt = `${HEALTH_SHIELD_MASTER_PROMPT}\n\n${promptText}`;
 
-    const responseText = response.choices[0]?.message?.content;
+    const response = await model.generateContent(fullPrompt);
+    const responseText = response.response.text();
+    
     if (!responseText) {
-      throw new Error("No response received from Groq verification model.");
+      throw new Error("No response received from Gemini verification model.");
     }
 
     const parsedResult = JSON.parse(responseText);
@@ -191,14 +177,14 @@ app.post("/api/verify", async (req, res) => {
     console.error("Error in /api/verify:", error);
     res.status(500).json({
       success: false,
-      error: error.message || "Failed to process health claim fact check.",
+      error: error.message || "Failed to process health claim fact check with Gemini AI.",
     });
   }
 });
 
 // Health check endpoint
 app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", app: "HealthShield AI" });
+  res.json({ status: "ok", app: "HealthShield AI", ai: "Gemini 2.0 Flash" });
 });
 
 async function startServer() {
@@ -217,7 +203,7 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`HealthShield AI server running on http://localhost:${PORT}`);
+    console.log(`HealthShield AI server running on http://localhost:${PORT} with Gemini 2.0 Flash`);
   });
 }
 

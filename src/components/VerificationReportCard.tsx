@@ -68,7 +68,7 @@ export const VerificationReportCard: React.FC<VerificationReportCardProps> = ({ 
     try {
       if (newFeedback) {
         localStorage.setItem(`healthshield_feedback_${result.mainClaim.slice(0, 40)}`, newFeedback);
-        setFeedbackMsg(newFeedback === 'helpful' ? 'Thank you! Glad this report was helpful.' : 'Thanks for your feedback! We will refine future sources.');
+        setFeedbackMsg(newFeedback === 'helpful' ? 'Thank you! Glad this report was helpful.' : 'Thanks for your feedback! We will refine future AI responses.');
       } else {
         localStorage.removeItem(`healthshield_feedback_${result.mainClaim.slice(0, 40)}`);
         setFeedbackMsg(null);
@@ -390,7 +390,6 @@ export const VerificationReportCard: React.FC<VerificationReportCardProps> = ({ 
 
   // Extract combined list of sources
   const sourcesList = [
-    ...(result.sources || []),
     ...(result.trustedSources || []),
   ].filter((src, idx, self) => Boolean(src) && self.indexOf(src) === idx);
 
@@ -796,13 +795,13 @@ export const VerificationReportCard: React.FC<VerificationReportCardProps> = ({ 
                   Source Links & Verified Authorities
                 </h3>
                 <p className="text-xs text-slate-400">
-                  {sourcesList.length > 0 ? `${sourcesList.length} verified medical references` : 'Trusted health bodies (WHO, ICMR, MoHFW)'}
+                  {sourcesList.length > 0 ? `${sourcesList.length} verified medical authorities` : 'Trusted health bodies (WHO, ICMR, MoHFW)'}
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-2.5">
               <span className="text-xs font-semibold text-slate-300 bg-slate-900 px-3 py-1 rounded-lg border border-slate-800 group-hover:border-slate-700 transition-colors">
-                {isSourceLinksOpen ? 'Collapse' : `View Sources (${sourcesList.length})`}
+                {isSourceLinksOpen ? 'Collapse' : `View Authorities (${sourcesList.length})`}
               </span>
               <div className="p-1 rounded-lg bg-slate-900 border border-slate-800 group-hover:border-slate-700 text-slate-400 group-hover:text-slate-200">
                 {isSourceLinksOpen ? (
