@@ -1,0 +1,6 @@
+{
+  "name": "HealthShield AI",
+  "description": "India's expert healthcare misinformation verifier. Fact-checks forwarded WhatsApp claims, images, and voice notes with trusted medical sources and structured risk analysis.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

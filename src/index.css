@@ -1,0 +1,117 @@
+@import "tailwindcss";
+
+@media print {
+  /* Hide all content outside report card */
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-size: 11pt !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  /* Show report card element */
+  #fact-check-report-card,
+  #fact-check-report-card * {
+    visibility: visible;
+  }
+
+  #fact-check-report-card {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 16px !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 8px !important;
+    box-shadow: none !important;
+  }
+
+  /* Hide interactive buttons, forms, and headers during printing */
+  .no-print,
+  button,
+  nav,
+  header,
+  footer,
+  [id*="-btn"] {
+    display: none !important;
+  }
+
+  /* Printer-friendly background and border contrast */
+  #fact-check-report-card .bg-slate-900,
+  #fact-check-report-card .bg-slate-950,
+  #fact-check-report-card .bg-slate-950\/80,
+  #fact-check-report-card .bg-slate-950\/60,
+  #fact-check-report-card .bg-slate-900\/90 {
+    background-color: #f8fafc !important;
+    color: #0f172a !important;
+    border-color: #cbd5e1 !important;
+  }
+
+  #fact-check-report-card .text-white,
+  #fact-check-report-card .text-slate-100,
+  #fact-check-report-card .text-slate-200,
+  #fact-check-report-card .text-slate-300 {
+    color: #0f172a !important;
+  }
+
+  #fact-check-report-card .text-slate-400,
+  #fact-check-report-card .text-slate-500 {
+    color: #475569 !important;
+  }
+
+  #fact-check-report-card .border-slate-800,
+  #fact-check-report-card .border-slate-700,
+  #fact-check-report-card .border-slate-800\/80 {
+    border-color: #cbd5e1 !important;
+  }
+
+  /* Status and badge color legibility on white paper */
+  #fact-check-report-card .text-emerald-400,
+  #fact-check-report-card .text-emerald-300 {
+    color: #047857 !important;
+  }
+
+  #fact-check-report-card .text-rose-400,
+  #fact-check-report-card .text-rose-300 {
+    color: #b91c1c !important;
+  }
+
+  #fact-check-report-card .text-amber-400,
+  #fact-check-report-card .text-amber-300 {
+    color: #b45309 !important;
+  }
+
+  #fact-check-report-card .text-teal-400,
+  #fact-check-report-card .text-teal-300 {
+    color: #0f766e !important;
+  }
+
+  /* Clean link formatting */
+  #fact-check-report-card a {
+    color: #0284c7 !important;
+    text-decoration: underline !important;
+  }
+
+  /* Prevent page breaks inside cards */
+  #fact-check-report-card > div,
+  #fact-check-report-card .grid > div {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* Ensure collapsible contents are printed regardless of state */
+  #fact-check-report-card .collapsible-content {
+    display: block !important;
+    visibility: visible !important;
+  }
+}

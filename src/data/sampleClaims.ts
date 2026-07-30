@@ -1,0 +1,60 @@
+import { SampleClaim } from '../types';
+
+export const SAMPLE_CLAIMS: SampleClaim[] = [
+  {
+    id: 'coronavirus-hot-water',
+    title: 'Hot Water & Coronavirus',
+    claimText: 'Drinking hot water every 15 minutes kills coronavirus. Forward this to everyone.',
+    category: 'Viral WhatsApp',
+    expectedVerdict: 'False',
+    riskLevel: 'High',
+  },
+  {
+    id: 'dengue-papaya-leaf',
+    title: 'Papaya Leaf Juice & Dengue',
+    claimText: 'Drinking fresh papaya leaf juice permanently cures Dengue fever overnight and restores blood platelets instantly.',
+    category: 'Seasonal/Dengue',
+    expectedVerdict: 'Misleading',
+    riskLevel: 'Medium',
+  },
+  {
+    id: 'diabetes-garlic-clove',
+    title: 'Garlic Soup Cures Diabetes',
+    claimText: 'Garlic and clove soup cures diabetes completely within 7 days. Stop taking all insulin and English medicines immediately!',
+    category: 'Chronic Illness',
+    expectedVerdict: 'False',
+    riskLevel: 'High',
+  },
+  {
+    id: 'jaggery-onion-lungs',
+    title: 'Jaggery & Onion for Pollution',
+    claimText: 'Eating raw onion with black jaggery every morning clears 100% lung blockage caused by severe air pollution in Delhi NCR.',
+    category: 'Viral WhatsApp',
+    expectedVerdict: 'Misleading',
+    riskLevel: 'Medium',
+  },
+  {
+    id: 'eyesight-herbal-drops',
+    title: 'Herbal Drops Restore Eyesight',
+    claimText: 'Special Ayurvedic eye drops made from honey and triphala restore 6/6 perfect vision and eliminate specs without laser surgery.',
+    category: 'Ayurvedic/Herbal',
+    expectedVerdict: 'False',
+    riskLevel: 'High',
+  },
+  {
+    id: 'polio-drops-infertility',
+    title: 'Polio Drops Rumor',
+    claimText: 'Pulse Polio campaign drops cause long-term infertility and reproductive health harm in young children.',
+    category: 'Vaccines',
+    expectedVerdict: 'False',
+    riskLevel: 'High',
+  },
+  {
+    id: 'handwashing-soap-infections',
+    title: 'Hand Washing with Soap',
+    claimText: 'Washing hands with soap and clean water for at least 20 seconds drastically reduces the transmission of viral gut and respiratory diseases.',
+    category: 'Viral WhatsApp',
+    expectedVerdict: 'True',
+    riskLevel: 'Low',
+  },
+];
