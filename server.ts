@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import OpenAI from "openai";
+import { tavily } from "@tavily/core";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 
@@ -22,6 +23,51 @@ function getOpenRouterClient() {
     apiKey,
     baseURL: "https://openrouter.ai/api/v1",
   });
+}
+
+// Fetch real-time medical evidence from the web using Tavily
+async function fetchTavilyEvidence(claimText: string): Promise<{ summary: string; sources: string[] }> {
+  const apiKey = process.env.TAVILY_API_KEY;
+  if (!apiKey) {
+    console.warn("TAVILY_API_KEY not set — skipping web search grounding.");
+    return { summary: "", sources: [] };
+  }
+
+  try {
+    const client = tavily({ apiKey });
+    const query = `health fact check medical evidence: ${claimText.slice(0, 200)}`;
+
+    const response = await client.search(query, {
+      searchDepth: "advanced",
+      maxResults: 5,
+      includeDomains: [
+        "who.int", "icmr.gov.in", "mohfw.gov.in", "aiims.edu",
+        "cdc.gov", "nih.gov", "pubmed.ncbi.nlm.nih.gov", "fda.gov",
+        "ncbi.nlm.nih.gov", "bmj.com", "thelancet.com", "nejm.org",
+        "healthline.com", "mayoclinic.org", "webmd.com"
+      ],
+      includeAnswer: true,
+    });
+
+    const sources: string[] = (response.results || [])
+      .filter((r: any) => r.url)
+      .map((r: any) => r.url as string);
+
+    // Build a concise context snippet from the top results
+    const snippets = (response.results || [])
+      .slice(0, 4)
+      .map((r: any) => `[${r.title || "Source"}]: ${(r.content || "").slice(0, 300)}`)
+      .join("\n\n");
+
+    const summary = response.answer
+      ? `Web Search Summary: ${response.answer}\n\nTop Evidence Snippets:\n${snippets}`
+      : `Top Evidence Snippets:\n${snippets}`;
+
+    return { summary, sources };
+  } catch (err: any) {
+    console.error("Tavily search error:", err.message || err);
+    return { summary: "", sources: [] };
+  }
 }
 
 const HEALTH_SHIELD_MASTER_PROMPT = `# ROLE
@@ -144,6 +190,9 @@ app.post("/api/verify", async (req, res) => {
 
     const openrouter = getOpenRouterClient();
 
+    // Run Tavily web search in parallel with prompt construction
+    const tavilyPromise = text ? fetchTavilyEvidence(text) : Promise.resolve({ summary: "", sources: [] });
+
     let promptText = "Analyze and fact-check the following health claim forwarded on social media/messaging apps. Please provide your response in JSON format.\n\n";
 
     if (text) {
@@ -160,6 +209,12 @@ app.post("/api/verify", async (req, res) => {
 
     if (audioBase64) {
       promptText += "AUDIO DATA: Transcribe and analyze any health claims in the audio.\n\n";
+    }
+
+    // Await Tavily evidence and inject into prompt
+    const { summary: tavilyEvidence, sources: tavilySources } = await tavilyPromise;
+    if (tavilyEvidence) {
+      promptText += `REAL-TIME WEB EVIDENCE (retrieved via Tavily — use this to ground your analysis and cite relevant URLs in the sources field):\n${tavilyEvidence}\n\n`;
     }
 
     promptText += "Ensure your response is a valid JSON object with all required fields.";
@@ -188,6 +243,14 @@ app.post("/api/verify", async (req, res) => {
     }
 
     const parsedResult = JSON.parse(responseText);
+
+    // Merge Tavily-sourced URLs into the result's sources array (deduplicated)
+    if (tavilySources.length > 0) {
+      const existingSources: string[] = parsedResult.sources || [];
+      const merged = [...new Set([...tavilySources, ...existingSources])];
+      parsedResult.sources = merged;
+    }
+
     res.json({ success: true, result: parsedResult });
   } catch (error: any) {
     console.error("Error in /api/verify:", error);
@@ -200,7 +263,12 @@ app.post("/api/verify", async (req, res) => {
 
 // Health check endpoint
 app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", app: "HealthShield AI", ai: "OpenRouter (GPT-4o)" });
+  res.json({
+    status: "ok",
+    app: "HealthShield AI",
+    ai: "OpenRouter (GPT-4o)",
+    webSearch: process.env.TAVILY_API_KEY ? "Tavily (active)" : "Tavily (not configured)",
+  });
 });
 
 async function startServer() {
