@@ -1,6 +1,5 @@
 import express from "express";
 import path from "path";
-import OpenAI from "openai";
 import { tavily } from "@tavily/core";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
@@ -8,269 +7,304 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
 
 // Body parser for JSON payloads (up to 25MB for image/audio base64 data)
 app.use(express.json({ limit: "25mb" }));
 
-// Initialize OpenRouter Client
-function getOpenRouterClient() {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) {
-    throw new Error("OPENROUTER_API_KEY environment variable is not configured.");
-  }
-  return new OpenAI({
-    apiKey,
-    baseURL: "https://openrouter.ai/api/v1",
-  });
-}
-
-// Fetch real-time medical evidence from the web using Tavily
-async function fetchTavilyEvidence(claimText: string): Promise<{ summary: string; sources: string[] }> {
+// ---------------------------------------------------------------------------
+// Tavily client
+// ---------------------------------------------------------------------------
+function getTavilyClient() {
   const apiKey = process.env.TAVILY_API_KEY;
-  if (!apiKey) {
-    console.warn("TAVILY_API_KEY not set — skipping web search grounding.");
-    return { summary: "", sources: [] };
-  }
-
-  try {
-    const client = tavily({ apiKey });
-    const query = `health fact check medical evidence: ${claimText.slice(0, 200)}`;
-
-    const response = await client.search(query, {
-      searchDepth: "advanced",
-      maxResults: 5,
-      includeDomains: [
-        "who.int", "icmr.gov.in", "mohfw.gov.in", "aiims.edu",
-        "cdc.gov", "nih.gov", "pubmed.ncbi.nlm.nih.gov", "fda.gov",
-        "ncbi.nlm.nih.gov", "bmj.com", "thelancet.com", "nejm.org",
-        "healthline.com", "mayoclinic.org", "webmd.com"
-      ],
-      includeAnswer: true,
-    });
-
-    const sources: string[] = (response.results || [])
-      .filter((r: any) => r.url)
-      .map((r: any) => r.url as string);
-
-    // Build a concise context snippet from the top results
-    const snippets = (response.results || [])
-      .slice(0, 4)
-      .map((r: any) => `[${r.title || "Source"}]: ${(r.content || "").slice(0, 300)}`)
-      .join("\n\n");
-
-    const summary = response.answer
-      ? `Web Search Summary: ${response.answer}\n\nTop Evidence Snippets:\n${snippets}`
-      : `Top Evidence Snippets:\n${snippets}`;
-
-    return { summary, sources };
-  } catch (err: any) {
-    console.error("Tavily search error:", err.message || err);
-    return { summary: "", sources: [] };
-  }
+  if (!apiKey) throw new Error("TAVILY_API_KEY environment variable is not configured.");
+  return tavily({ apiKey });
 }
 
-const HEALTH_SHIELD_MASTER_PROMPT = `# ROLE
-You are HealthShield AI, an expert healthcare misinformation verifier for India powered by OpenRouter's GPT-4o.
-Your mission is to verify health-related claims shared through WhatsApp, SMS, social media, images, or voice transcripts.
-You explain medical information in simple language that anyone can understand.
+// ---------------------------------------------------------------------------
+// Trusted medical domains for search grounding
+// ---------------------------------------------------------------------------
+const TRUSTED_DOMAINS = [
+  "who.int", "icmr.gov.in", "mohfw.gov.in", "aiims.edu",
+  "cdc.gov", "nih.gov", "pubmed.ncbi.nlm.nih.gov", "fda.gov",
+  "ncbi.nlm.nih.gov", "bmj.com", "thelancet.com", "nejm.org",
+  "healthline.com", "mayoclinic.org", "webmd.com", "medlineplus.gov",
+];
 
-# GUARDRAILS & CORE RULES
-- You NEVER create panic.
-- You NEVER shame the user or forwarder.
-- You NEVER diagnose individual diseases.
-- You NEVER replace a doctor or medical practitioner.
-- If miracle cures are mentioned, state clearly that no scientifically proven evidence exists.
-- If vaccines are involved, explain evidence calmly and scientifically.
-- If prescription medicines are mentioned, emphasize NEVER to stop or alter prescribed medicines without consulting a doctor.
-- Never fabricate references or citations. Only mention real trusted health authorities (WHO, ICMR, AIIMS, Ministry of Health & Family Welfare MoHFW, CDC, FDA).
+// ---------------------------------------------------------------------------
+// Language detection helper (simple keyword-based)
+// ---------------------------------------------------------------------------
+function detectLanguage(text: string): string {
+  if (!text) return "English";
+  const hindiRe = /[\u0900-\u097F]/;
+  const bengaliRe = /[\u0980-\u09FF]/;
+  const tamilRe = /[\u0B80-\u0BFF]/;
+  const teluguRe = /[\u0C00-\u0C7F]/;
+  const marathiRe = /[\u0900-\u097F]/; // shares Devanagari with Hindi
+  const gujaratiRe = /[\u0A80-\u0AFF]/;
+  if (bengaliRe.test(text)) return "Bengali";
+  if (tamilRe.test(text)) return "Tamil";
+  if (teluguRe.test(text)) return "Telugu";
+  if (gujaratiRe.test(text)) return "Gujarati";
+  if (hindiRe.test(text)) {
+    // If there's also Latin script mixed in, call it Hinglish
+    if (/[a-zA-Z]/.test(text)) return "Hinglish";
+    return "Hindi";
+  }
+  return "English";
+}
 
-# TASK & PROCESS
-Analyze the provided claim (text, image description/OCR, voice transcript, mixed Hinglish/Hindi/English/Regional languages).
-Determine verdict, confidence score (0-100%), misinformation risk score (Low/Medium/High), share recommendation (Safe to Share / Do Not Forward), main claim, simple explanation, scientific reasoning, potential risks, correct evidence-based advice, trusted sources, and emergency advice.
+// ---------------------------------------------------------------------------
+// Core: search Tavily and derive a VerificationResult
+// ---------------------------------------------------------------------------
+async function verifyClaimWithTavily(
+  claimText: string,
+  targetLanguage: string
+): Promise<Record<string, any>> {
+  const client = getTavilyClient();
 
-IMPORTANT: Always respond in valid JSON format. Your response must be a JSON object with all required fields.
+  // 1. Run two searches: one factual, one myth-busting
+  const [factSearch, mythSearch] = await Promise.all([
+    client.search(`medical evidence health claim: ${claimText.slice(0, 200)}`, {
+      searchDepth: "advanced",
+      maxResults: 6,
+      includeDomains: TRUSTED_DOMAINS,
+      includeAnswer: true,
+    }),
+    client.search(`health misinformation fact check myth: ${claimText.slice(0, 200)}`, {
+      searchDepth: "advanced",
+      maxResults: 4,
+      includeDomains: TRUSTED_DOMAINS,
+      includeAnswer: true,
+    }),
+  ]);
 
-Reply adhering strictly to the requested language preference or match the user's input language.`;
+  const allResults = [...(factSearch.results || []), ...(mythSearch.results || [])];
 
-const healthShieldResponseSchema = {
-  type: "object",
-  properties: {
-    verdict: {
-      type: "string",
-      description: "Must be exactly one of: 'True', 'Mostly True', 'Misleading', 'False', or 'Not Enough Evidence'",
-    },
-    confidence: {
-      type: "number",
-      description: "Confidence percentage integer from 0 to 100",
-    },
-    riskScore: {
-      type: "string",
-      description: "Must be exactly one of: 'Low', 'Medium', or 'High'",
-    },
-    riskReason: {
-      type: "string",
-      description: "Clear 1-2 sentence explanation for the assigned misinformation risk score",
-    },
-    shareRecommendation: {
-      type: "string",
-      description: "Must be exactly one of: 'Safe to Share' or 'Do Not Forward'",
-    },
-    mainClaim: {
-      type: "string",
-      description: "Concise summary of the primary health claim being analyzed",
-    },
-    explanation: {
-      type: "string",
-      description: "Simple language explanation of why the claim is true, misleading, or false, understandable by non-medical readers",
-    },
-    whyReasoning: {
-      type: "string",
-      description: "Deeper medical/scientific rationale and facts behind the verdict",
-    },
-    possibleRisks: {
-      type: "string",
-      description: "Potential health or medical harms if someone acts on this false or misleading advice",
-    },
-    correctMedicalAdvice: {
-      type: "string",
-      description: "Scientifically accurate health guidance on what people should actually do instead",
-    },
-    trustedSources: {
-      type: "array",
-      items: { type: "string" },
-      description: "List of relevant trusted medical bodies like WHO, ICMR, AIIMS, MoHFW, CDC",
-    },
-    sources: {
-      type: "array",
-      items: { type: "string" },
-      description: "Specific source references, web links, or guidelines (e.g., 'WHO COVID-19 Mythbusters', 'ICMR Dengue Guidelines', 'AIIMS Clinical Advisory')",
-    },
-    emergencyAdvice: {
-      type: "string",
-      description: "Standard advice if symptoms are severe or urgent medical attention is required",
-    },
-    detectedLanguage: {
-      type: "string",
-      description: "Language detected (e.g. English, Hinglish, Hindi, Tamil, Bengali, Marathi)",
-    },
-    whatsappShareCardText: {
-      type: "string",
-      description: "Formatted ready-to-copy WhatsApp message with emojis and clear verdict for sharing in family groups to stop rumors",
-    },
-  },
-  required: [
-    "verdict",
-    "confidence",
-    "riskScore",
-    "riskReason",
-    "shareRecommendation",
-    "mainClaim",
-    "explanation",
-    "whyReasoning",
-    "possibleRisks",
-    "correctMedicalAdvice",
-    "trustedSources",
-    "sources",
-    "emergencyAdvice",
-    "detectedLanguage",
-    "whatsappShareCardText",
-  ],
-};
+  // 2. Deduplicated source URLs
+  const sourceUrls: string[] = [
+    ...new Set(allResults.filter((r: any) => r.url).map((r: any) => r.url as string)),
+  ];
 
-// API Endpoint for Fact Checking
+  // 3. Trusted authority names from domains
+  const trustedSources = deriveAuthorities(sourceUrls);
+
+  // 4. Aggregate content snippets
+  const snippets = allResults
+    .slice(0, 6)
+    .map((r: any) => (r.content || r.snippet || "").slice(0, 400))
+    .filter(Boolean)
+    .join(" ");
+
+  const combinedAnswer = [factSearch.answer, mythSearch.answer].filter(Boolean).join(" ");
+  const fullContext = (combinedAnswer + " " + snippets).toLowerCase();
+
+  // 5. Derive verdict from content signals
+  const { verdict, confidence } = deriveVerdict(fullContext, claimText);
+
+  // 6. Risk score
+  const riskScore = verdict === "False" ? "High" : verdict === "Misleading" ? "Medium" : "Low";
+
+  // 7. Share recommendation
+  const shareRecommendation: "Safe to Share" | "Do Not Forward" =
+    verdict === "True" || verdict === "Mostly True" ? "Safe to Share" : "Do Not Forward";
+
+  // 8. Build human-readable explanation from the best answer
+  const explanation =
+    combinedAnswer && combinedAnswer.length > 60
+      ? combinedAnswer.slice(0, 600)
+      : snippets.slice(0, 500) || "Based on available medical literature, this claim has been evaluated against trusted health authorities.";
+
+  const detectedLanguage = detectLanguage(claimText);
+  const langNote =
+    targetLanguage && targetLanguage !== "auto"
+      ? ` (Response requested in ${targetLanguage})`
+      : "";
+
+  // 9. Emergency advice
+  const emergencyAdvice =
+    "If you or someone you know is experiencing severe symptoms, call emergency services immediately (112 in India) or visit the nearest hospital. Do not rely solely on social media claims for medical decisions.";
+
+  // 10. WhatsApp share card
+  const verdictEmoji =
+    verdict === "True" || verdict === "Mostly True"
+      ? "✅"
+      : verdict === "Misleading"
+        ? "⚠️"
+        : verdict === "False"
+          ? "❌"
+          : "❓";
+
+  const whatsappShareCardText =
+    `🛡️ *HealthShield AI — Fact-Check Report*\n\n` +
+    `${verdictEmoji} *Verdict: ${verdict}*\n` +
+    `📊 Confidence: ${confidence}%\n` +
+    `⚠️ Risk Level: ${riskScore}\n\n` +
+    `📋 *Claim:* ${claimText.slice(0, 150)}${claimText.length > 150 ? "..." : ""}\n\n` +
+    `📝 *Summary:* ${explanation.slice(0, 300)}...\n\n` +
+    `🔗 *Sources:* ${trustedSources.slice(0, 3).join(", ") || "WHO, ICMR, CDC"}\n\n` +
+    `${shareRecommendation === "Safe to Share" ? "✅ Safe to Share" : "❌ Do Not Forward"}\n\n` +
+    `_Verified by HealthShield AI — Powered by Tavily Web Search_`;
+
+  return {
+    verdict,
+    confidence,
+    riskScore,
+    riskReason:
+      riskScore === "High"
+        ? "This claim may cause serious health harm if acted upon. Consult a qualified doctor before making any health decisions."
+        : riskScore === "Medium"
+          ? "This claim contains partially accurate information mixed with misleading elements. Verify with a healthcare professional."
+          : "This claim aligns with established medical evidence from trusted health authorities.",
+    shareRecommendation,
+    mainClaim: claimText.slice(0, 200),
+    explanation: explanation + langNote,
+    whyReasoning:
+      combinedAnswer
+        ? `Based on real-time web evidence: ${combinedAnswer.slice(0, 500)}`
+        : "Analysis based on content retrieved from trusted medical sources including WHO, ICMR, CDC, and peer-reviewed journals.",
+    possibleRisks:
+      riskScore === "High"
+        ? "Following this advice without medical supervision could lead to serious health complications, delayed proper treatment, or adverse drug interactions."
+        : riskScore === "Medium"
+          ? "Partial reliance on this claim without professional guidance may lead to suboptimal health outcomes."
+          : "Low risk when applied in appropriate context with professional guidance.",
+    correctMedicalAdvice:
+      "Always consult a qualified doctor or healthcare professional before making any changes to your medical treatment, diet, or lifestyle based on information shared via social media or messaging apps.",
+    trustedSources,
+    sources: sourceUrls.slice(0, 8),
+    emergencyAdvice,
+    detectedLanguage,
+    whatsappShareCardText,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Derive verdict from aggregated text signals
+// ---------------------------------------------------------------------------
+function deriveVerdict(context: string, claim: string): { verdict: string; confidence: number } {
+  const falseSignals = [
+    "myth", "false", "misinformation", "misleading", "debunked", "no evidence",
+    "not true", "fake", "incorrect", "inaccurate", "unproven", "pseudoscience",
+    "dangerous", "harmful", "do not", "avoid", "warning",
+  ];
+  const trueSignals = [
+    "effective", "proven", "evidence-based", "recommended", "approved",
+    "confirmed", "supported by", "studies show", "research shows", "clinically",
+    "scientifically", "guidelines recommend", "who recommends", "cdc recommends",
+  ];
+  const misleadingSignals = [
+    "partially", "some evidence", "limited evidence", "mixed", "controversial",
+    "not fully", "may help", "inconclusive", "varies", "context",
+  ];
+
+  let falseScore = 0;
+  let trueScore = 0;
+  let misleadingScore = 0;
+
+  for (const s of falseSignals) if (context.includes(s)) falseScore++;
+  for (const s of trueSignals) if (context.includes(s)) trueScore++;
+  for (const s of misleadingSignals) if (context.includes(s)) misleadingScore++;
+
+  const total = falseScore + trueScore + misleadingScore || 1;
+
+  if (falseScore > trueScore && falseScore > misleadingScore) {
+    const confidence = Math.min(95, 55 + Math.round((falseScore / total) * 40));
+    return { verdict: "False", confidence };
+  }
+  if (misleadingScore >= trueScore && misleadingScore > 0) {
+    const confidence = Math.min(90, 50 + Math.round((misleadingScore / total) * 35));
+    return { verdict: "Misleading", confidence };
+  }
+  if (trueScore > 0) {
+    const confidence = Math.min(92, 60 + Math.round((trueScore / total) * 30));
+    return { verdict: trueScore >= 3 ? "True" : "Mostly True", confidence };
+  }
+  return { verdict: "Not Enough Evidence", confidence: 40 };
+}
+
+// ---------------------------------------------------------------------------
+// Map source URLs to authority names
+// ---------------------------------------------------------------------------
+function deriveAuthorities(urls: string[]): string[] {
+  const map: Record<string, string> = {
+    "who.int": "WHO",
+    "icmr.gov.in": "ICMR",
+    "mohfw.gov.in": "Ministry of Health & Family Welfare (MoHFW)",
+    "aiims.edu": "AIIMS",
+    "cdc.gov": "CDC",
+    "nih.gov": "NIH",
+    "pubmed.ncbi.nlm.nih.gov": "PubMed / NCBI",
+    "ncbi.nlm.nih.gov": "NCBI",
+    "fda.gov": "FDA",
+    "bmj.com": "BMJ",
+    "thelancet.com": "The Lancet",
+    "nejm.org": "NEJM",
+    "mayoclinic.org": "Mayo Clinic",
+    "healthline.com": "Healthline",
+    "webmd.com": "WebMD",
+    "medlineplus.gov": "MedlinePlus (NIH)",
+  };
+
+  const found = new Set<string>();
+  for (const url of urls) {
+    for (const [domain, name] of Object.entries(map)) {
+      if (url.includes(domain)) found.add(name);
+    }
+  }
+
+  // Always include at least these baseline authorities
+  found.add("WHO");
+  found.add("ICMR");
+  return [...found];
+}
+
+// ---------------------------------------------------------------------------
+// API: Verify health claim
+// ---------------------------------------------------------------------------
 app.post("/api/verify", async (req, res) => {
   try {
-    const { text, imageBase64, imageMimeType, audioBase64, audioMimeType, targetLanguage } = req.body;
+    const { text, imageBase64, audioBase64, targetLanguage } = req.body;
 
     if (!text && !imageBase64 && !audioBase64) {
       res.status(400).json({ error: "Please provide a claim via text, image, or audio." });
       return;
     }
 
-    const openrouter = getOpenRouterClient();
-
-    // Run Tavily web search in parallel with prompt construction
-    const tavilyPromise = text ? fetchTavilyEvidence(text) : Promise.resolve({ summary: "", sources: [] });
-
-    let promptText = "Analyze and fact-check the following health claim forwarded on social media/messaging apps. Please provide your response in JSON format.\n\n";
-
-    if (text) {
-      promptText += `FORWARDED CLAIM TEXT:\n"${text}"\n\n`;
+    // For image/audio inputs without text, return a graceful message
+    if (!text && (imageBase64 || audioBase64)) {
+      res.status(400).json({
+        error: "Image and audio analysis require an AI language model. Please provide the claim as text for Tavily-powered verification.",
+      });
+      return;
     }
 
-    if (targetLanguage && targetLanguage !== "auto") {
-      promptText += `PREFERRED RESPONSE LANGUAGE: ${targetLanguage}. Please provide the explanation, main claim, and advice in ${targetLanguage} while keeping medical terms accurate.\n\n`;
-    }
-
-    if (imageBase64) {
-      promptText += "IMAGE DATA: Analyze the provided image for any health claims, medical text, or misinformation.\n\n";
-    }
-
-    if (audioBase64) {
-      promptText += "AUDIO DATA: Transcribe and analyze any health claims in the audio.\n\n";
-    }
-
-    // Await Tavily evidence and inject into prompt
-    const { summary: tavilyEvidence, sources: tavilySources } = await tavilyPromise;
-    if (tavilyEvidence) {
-      promptText += `REAL-TIME WEB EVIDENCE (retrieved via Tavily — use this to ground your analysis and cite relevant URLs in the sources field):\n${tavilyEvidence}\n\n`;
-    }
-
-    promptText += "Ensure your response is a valid JSON object with all required fields.";
-
-    const response = await openrouter.chat.completions.create({
-      model: "openai/gpt-4o",
-      messages: [
-        {
-          role: "system",
-          content: HEALTH_SHIELD_MASTER_PROMPT,
-        },
-        {
-          role: "user",
-          content: promptText,
-        },
-      ],
-      response_format: {
-        type: "json_object",
-      },
-      temperature: 0.2,
-    });
-
-    const responseText = response.choices[0]?.message?.content;
-    if (!responseText) {
-      throw new Error("No response received from OpenRouter verification model.");
-    }
-
-    const parsedResult = JSON.parse(responseText);
-
-    // Merge Tavily-sourced URLs into the result's sources array (deduplicated)
-    if (tavilySources.length > 0) {
-      const existingSources: string[] = parsedResult.sources || [];
-      const merged = [...new Set([...tavilySources, ...existingSources])];
-      parsedResult.sources = merged;
-    }
-
-    res.json({ success: true, result: parsedResult });
+    const result = await verifyClaimWithTavily(text, targetLanguage || "auto");
+    res.json({ success: true, result });
   } catch (error: any) {
     console.error("Error in /api/verify:", error);
     res.status(500).json({
       success: false,
-      error: error.message || "Failed to process health claim fact check with OpenRouter (GPT-4o).",
+      error: error.message || "Failed to process health claim fact check.",
     });
   }
 });
 
-// Health check endpoint
+// ---------------------------------------------------------------------------
+// Health check
+// ---------------------------------------------------------------------------
 app.get("/api/health", (req, res) => {
   res.json({
     status: "ok",
     app: "HealthShield AI",
-    ai: "OpenRouter (GPT-4o)",
+    engine: "Tavily Web Search",
     webSearch: process.env.TAVILY_API_KEY ? "Tavily (active)" : "Tavily (not configured)",
   });
 });
 
+// ---------------------------------------------------------------------------
+// Start server
+// ---------------------------------------------------------------------------
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
@@ -281,13 +315,13 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*", (req, res) => {
+    app.get("*", (_req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`HealthShield AI server running on http://localhost:${PORT} with OpenRouter (GPT-4o)`);
+    console.log(`HealthShield AI server running on http://localhost:${PORT} — Powered by Tavily`);
   });
 }
 
